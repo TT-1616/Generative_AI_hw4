@@ -2,6 +2,7 @@
 
 import json
 import re
+import sys
 import time
 
 from dotenv import load_dotenv
@@ -82,7 +83,13 @@ def load_questions(path: str = "math_questions.md") -> list[str]:
 
 def main():
     questions = load_questions()
-    for i, question in enumerate(questions, 1):
+    if len(sys.argv) > 1:
+        question_number = int(sys.argv[1])
+        questions_to_run = [(question_number, questions[question_number - 1])]
+    else:
+        questions_to_run = list(enumerate(questions, 1))
+
+    for i, question in questions_to_run:
         print(f"## Question {i}")
         print(f"> {question}\n")
 
