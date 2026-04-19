@@ -1,9 +1,12 @@
 """Math agent that solves questions using tools in a ReAct loop."""
 
 import json
+import re
+import time
 
 from dotenv import load_dotenv
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import ModelHTTPError
 from calculator import calculate
 
 load_dotenv()
@@ -12,7 +15,7 @@ load_dotenv()
 #   "google-gla:gemini-2.5-flash"       (needs GOOGLE_API_KEY)
 #   "openai:gpt-4o-mini"                (needs OPENAI_API_KEY)
 #   "anthropic:claude-sonnet-4-6"    (needs ANTHROPIC_API_KEY)
-MODEL = "google-gla:gemini-2.5-flash"
+MODEL = "google-gla:gemini-2.5-flash-lite"
 
 agent = Agent(
     MODEL,
@@ -20,6 +23,9 @@ agent = Agent(
         "You are a helpful assistant. Solve each question step by step. "
         "Use the calculator tool for arithmetic. "
         "Use the product_lookup tool when a question mentions products from the catalog. "
+        "When a question asks for a total, difference, comparison, or best deal involving multiple products, "
+        "call product_lookup separately for each product, then use the calculator tool for the arithmetic. "
+        "Do not ask the user to choose a product when the product names are already in the question. "
         "If a question cannot be answered with the information given, say so."
     ),
 )
@@ -37,7 +43,10 @@ def calculator_tool(expression: str) -> str:
 @agent.tool_plain
 def product_lookup(product_name: str) -> str:
     """Look up the price of a product by name.
+
     Use this when a question asks about product prices from the catalog.
+    Call this once for each product when a question compares products,
+    asks for the price difference, or asks for a total cost.
     """
     with open("products.json") as f:
         products = json.load(f)
@@ -66,7 +75,18 @@ def main():
         print(f"## Question {i}")
         print(f"> {question}\n")
 
-        result = agent.run_sync(question)
+        while True:
+            try:
+                result = agent.run_sync(question)
+                break
+            except ModelHTTPError as e:
+                if e.status_code != 429:
+                    raise
+
+                match = re.search(r"retry in ([\d.]+)s", str(e), re.IGNORECASE)
+                wait_seconds = float(match.group(1)) + 1 if match else 30
+                print(f"Rate limit reached. Waiting {wait_seconds:.1f} seconds...")
+                time.sleep(wait_seconds)
 
         print("### Trace")
         for message in result.all_messages():
