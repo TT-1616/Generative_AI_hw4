@@ -54,6 +54,17 @@ def product_lookup(product_name: str) -> str:
     if product_name in products:
         return str(products[product_name])
 
+    normalized_name = product_name.strip().lower()
+    for name, price in products.items():
+        if name.lower() == normalized_name:
+            return str(price)
+
+    if normalized_name.endswith("s"):
+        singular_name = normalized_name[:-1]
+        for name, price in products.items():
+            if name.lower() == singular_name:
+                return str(price)
+
     available_products = ", ".join(products.keys())
     return f"Product not found. Available products: {available_products}"
 
